@@ -26,19 +26,11 @@ typing_extensions==4.15.0
 uvicorn==0.41.0
 
 # Infrastructure & Database
-redis==4.7.0
+redis==6.0.0
 hvac==1.2.0
-psycopg[binary]==3.1.18
-sqlcipher3==4.5.0
-pytest-asyncio==0.23.3
+psycopg[binary]==3.2.13
+sqlcipher3  # Encrypted SQLite support via Peewee
 
-# Infrastructure & Services
-redis>=4.7.0
-hvac>=1.2.0
-psycopg[binary]>=3.1.0
-
-# Database & Queue Persistence
-sqlcipher3>=4.0.0
 
 # Testing & Async Support
 pytest>=7.4.0
