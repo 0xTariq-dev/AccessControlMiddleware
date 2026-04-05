@@ -124,6 +124,39 @@ services:
       retries: 3
       start_period: 10s
 
+  # Database Initialization Service
+  # Runs migrations before middleware starts
+  # Ensures schema is up-to-date; idempotent (safe if run multiple times)
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: access-control-migrate-init
+    profiles: ["init"]  # Run with: docker-compose --profile init up migrate
+    working_dir: /app
+    depends_on:
+      vault:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-acm_user}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-access_control}
+      DATABASE_TYPE: postgresql
+      VAULT_ADDR: http://vault:8200
+      VAULT_TOKEN: ${VAULT_TOKEN:-}
+      VAULT_ENABLED: ${VAULT_ENABLED:-false}
+      PYTHONPATH: /app
+    env_file:
+      - .env
+    volumes:
+      - ./app:/app/app:ro
+      - ./migrations:/app/migrations:ro
+      - middleware-data:/app/data
+    networks:
+      - access-control-network
+    command: ["python", "-m", "app.cli", "migrate"]
+    restart: "no"  # Don't restart after migration completes
+
   # Access Control Middleware Application
   # FastAPI service handling device integrations, event processing, API
   middleware:
@@ -141,6 +174,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
       # Database configuration
       DATABASE_URL: postgres://${POSTGRES_USER:-acm_user}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-access_control}
@@ -185,14 +220,16 @@ services:
       start_period: 20s
 
   # Migration/Admin Helper Service (optional)
-  # Use with: docker-compose run --rm migration migrate
-  # Profile: tools (use --profile tools to activate this service)
+  # Use with: docker-compose run --rm --profile tools migration migrate
+  #           docker-compose run --rm --profile tools migration status
+  #           docker-compose run --rm --profile tools migration rollback
+  # Profile: tools (use --profile tools to include this service)
   migration:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: access-control-migration
-    profiles: ["tools"]
+    container_name: access-control-migration-helper
+    profiles: ["tools"]  # Activate with: docker-compose --profile tools ...
     working_dir: /app
     depends_on:
       vault:
@@ -201,19 +238,29 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-acm_user}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-access_control}
+      DATABASE_TYPE: postgresql
       VAULT_ADDR: http://vault:8200
       VAULT_TOKEN: ${VAULT_TOKEN:-}
-      VAULT_ENABLED: ${VAULT_ENABLED:-false}  # Disable for local migrations
+      VAULT_ENABLED: ${VAULT_ENABLED:-false}  # Disable for local migrations (uses DB creds)
       PYTHONPATH: /app
+      PYTHONUNBUFFERED: 1
     env_file:
       - .env
     volumes:
-      - ./app:/app/app
-      - ./migrations:/app/migrations
+      - ./app:/app/app:ro
+      - ./migrations:/app/migrations:ro
       - middleware-data:/app/data
     networks:
       - access-control-network
-    command: ["python", "-m", "peewee_migrate", "status"]
+    # Default command (show status); override via docker-compose run ... <command>
+    # Examples:
+    #   docker-compose run migration migrate        # Apply pending migrations
+    #   docker-compose run migration status         # Show migration status
+    #   docker-compose run migration rollback       # Rollback last migration
+    #   docker-compose run migration init           # Initialize migrations directory
+    command: ["python", "-m", "app.cli", "status"]
+    stdin_open: true
+    tty: true
 
 # Docker Networks
 networks:
