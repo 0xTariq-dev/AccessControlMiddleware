@@ -19,7 +19,7 @@ Integrates with external authentication systems, processes real-time security ev
 
 ### Prerequisites
 
-- Python 3.11+
+- Python 3.12+
 - Docker & Docker Compose (for containerized deployment)
 - PostgreSQL 14+ (or SQLite for development)
 - Optional: HashiCorp Vault for secrets management
@@ -48,8 +48,9 @@ pip install -r requirements.txt
 # Create .env file from template
 cp .env.example .env
 
-# Run migrations (if using PostgreSQL)
-python -m alembic upgrade head
+# Run migrations
+python -m peewee_migrate create init
+python -m peewee_migrate migrate
 
 # Start the server
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
@@ -100,39 +101,65 @@ See [.env.example](.env.example) for complete configuration options.
 ### High-Level Overview
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                 Access Control Middleware                    │
-├─────────────────────────────────────────────────────────────┤
-│                                                               │
-│  ┌──────────────┐      ┌──────────────┐    ┌────────────┐   │
-│  │ REST API     │      │ Event Stream │    │ Database   │   │
-│  │ (FastAPI)    │      │ (Redis Queue)│    │(PostgreSQL)│   │
-│  └──────────────┘      └──────────────┘    └────────────┘   │
-│          │                     │                    │        │
-│          └─────────────────────┼────────────────────┘        │
-│                                │                             │
-│                    ┌───────────────────────┐                 │
-│                    │  Device Integrations  │                 │
-│                    │  - Hikvision ISAPI    │                 │
-│                    │  - Other Vendors      │                 │
-│                    │  (Mock for testing)   │                 │
-│                    └───────────────────────┘                 │
-│                                │                             │
-│                         ┌──────────────┐                    │
-│                         │ Vault Secrets│                    │
-│                         │ Management   │                    │
-│                         └──────────────┘                     │
-│                                                               │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                    Access Control Middleware                      │
+│                                                                  │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │                    Nginx Reverse Proxy                    │  │
+│  └────────┬─────────────────────────┬───────────────────────┘  │
+│           │                         │                           │
+│  ┌────────▼────────┐    ┌──────────▼───────┐    ┌────────────┤  │
+│  │ REST API Loop   │    │ Event Stream     │    │ Distributed│  │
+│  │ (FastAPI)       │    │ Processor        │    │ Locking    │  │
+│  │                 │    │ (FastAPI Tasks)  │    │ (Redis)    │  │
+│  └────────┬────────┘    └──────────┬───────┘    └────────────┤  │
+│           │                       │                    ▲       │
+│  ┌────────▼───────────────────────▼────────┐         │       │
+│  │         Peewee ORM Layer                 │         │       │
+│  │  - Models, Schemas, Relationships        │         │       │
+│  └────────┬──────────────────────┬──────────┘         │       │
+│           │                      │                    │       │
+│  ┌────────▼───────────┐  ┌───────▼──────┐  ┌────────▼─────┐ │
+│  │  PostgreSQL DB     │  │   SQLite     │  │   Redis      │ │
+│  │  (Production)      │  │  (Dev/Test)  │  │  (Locking,   │ │
+│  │                    │  │              │  │   Fallback)  │ │
+│  └────────────────────┘  └──────────────┘  └──────────────┘ │
+│                                                              │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │         Device Integrations & Controllers             │  │
+│  │  - Hikvision ISAPI (vendored, configurable)          │  │
+│  │  - Mock Device Controller (dev/demo)                 │  │
+│  │  - Extensible vendor architecture                    │  │
+│  └───────────────────────────────────────────────────────┘  │
+│                           ▲                                   │
+│                           │                                   │
+│  ┌────────────────────────┴──────────────────────────────┐  │
+│  │     Vault Secret Management (Credentials)             │  │
+│  │  - Device auth tokens                                │  │
+│  │  - Database credentials                              │  │
+│  │  - API keys                                          │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                                                              │
+└──────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────┐
+│          Queue Management for Resilience                       │
+│  - Redis Primary (fast, distributed)                          │
+│  - SQLite Fallback Queue (on-disk persistence)                │
+│  - Queue Manager (automatic failover & recovery)              │
+└────────────────────────────────────────────────────────────────┘
 ```
 
 ### Key Components
 
 - **REST API** (`app/routers/`): Device control, event querying, status endpoints
-- **Event Processing** (`app/models.py`, `app/schemas.py`): Standardized event structures
-- **Device Drivers** (`app/devices/`): Vendor-specific ISAPI implementations
-- **Database** (`migrations/`): PostgreSQL-backed persistent storage
-- **Authentication** (`app/crypto.py`, `app/vault_helper.py`): Encryption and credential management
+- **Event Processing** (`app/models.py`, `app/schemas.py`): Standardized event structures via Peewee ORM
+- **Device Drivers** (`app/devices/`): Vendor-specific ISAPI implementations with mock support
+- **Database** (`migrations/`, `app/models.py`): Peewee-backed PostgreSQL/SQLite persistent storage
+- **Queue Manager** (`app/queue_manager.py`): In-memory + persistent SQLite queue with Redis fallback for event processing resilience
+- **Redis Helper** (`app/redis_helper.py`): Distributed locking, connection pooling, async queue operations, and health checks
+- **Secrets Management** (`app/vault_helper.py`, `app/crypto.py`): HashiCorp Vault integration for credential handling and encryption utilities
+- **Reverse Proxy** (`deploy/nginx/`): Nginx configuration for TLS termination and load balancing
 
 ## API Documentation
 
@@ -190,18 +217,32 @@ AccessControlMiddleware/
 │   ├── main.py              # FastAPI app initialization
 │   ├── config.py            # Configuration management
 │   ├── crypto.py            # Encryption utilities
-│   ├── database.py          # Database connections
-│   ├── models.py            # SQLAlchemy models
+│   ├── database.py          # Database connections & Peewee setup
+│   ├── models.py            # Peewee ORM models
 │   ├── schemas.py           # Pydantic schemas
 │   ├── vault_helper.py      # Vault integration
+│   ├── queue_manager.py     # Event queue with Redis/SQLite fallback
+│   ├── redis_helper.py      # Redis client, locking, health checks
 │   ├── devices/             # Device vendor implementations
-│   │   └── __init__.py
+│   │   ├── __init__.py
+│   │   ├── base.py          # Base DeviceDriver interface
+│   │   ├── factory.py       # Device controller factory
+│   │   └── vendors/         # Vendor-specific implementations
+│   │       ├── hikvision.py # Hikvision ISAPI driver
+│   │       └── mock.py      # Mock device driver (testing/demo)
 │   └── routers/             # API endpoint groups
-│       └── __init__.py
-├── deploy/                  # Deployment configs
-│   ├── services/            # Systemd service files
-│   ├── nginx/               # Reverse proxy configs
-│   └── vault/               # Secrets management configs
+│       ├── __init__.py
+│       ├── devices.py       # Device management endpoints
+│       ├── events.py        # Event processing endpoints
+│       └── health.py        # Health check endpoints
+├── deploy/                  # Deployment configurations
+│   ├── services/            # Systemd service & timer files
+│   │   ├── access-control.service
+│   │   └── access-control.timer
+│   ├── nginx/               # Reverse proxy configuration
+│   │   └── nginx.conf       # Production nginx setup
+│   └── vault/               # Vault configuration
+│       └── vault-config.hcl # Vault server setup
 ├── migrations/              # Database migrations
 │   └── 001_initial_schema.py
 ├── tests/                   # Test suite
@@ -218,17 +259,36 @@ AccessControlMiddleware/
 ### Running Tests
 
 ```bash
-# Install test dependencies
+# Install dependencies (includes test packages)
 pip install -r requirements.txt
 
-# Run all tests
+# Run all tests with pytest
 pytest
 
-# Run with coverage
+# Run with coverage report
 pytest --cov=app --cov-report=html
 
 # Run specific test file
 pytest tests/test_devices.py -v
+
+# Run async tests
+pytest tests/test_async.py -v -s
+```
+
+### Database Migrations
+
+```bash
+# Create a new migration
+python -m peewee_migrate create migration_name
+
+# Apply pending migrations
+python -m peewee_migrate migrate
+
+# Show migration status
+python -m peewee_migrate status
+
+# Rollback last migration
+python -m peewee_migrate rollback
 ```
 
 ### Adding a New Device Vendor
@@ -260,12 +320,15 @@ bandit -r app/
 ## Security Considerations
 
 - ✅ All credentials stored in HashiCorp Vault (not in .env for production)
+- ✅ Device credentials never stored locally; fetched from Vault on-demand
 - ✅ Database passwords encrypted with industry standards
-- ✅ HTTPS enforced via Nginx reverse proxy
+- ✅ HTTPS enforced via Nginx reverse proxy with TLS termination
 - ✅ Rate limiting on sensitive endpoints
-- ✅ Complete audit trail of all device access
-- ✅ Input validation on all API endpoints
-- ✅ SQL injection protection via SQLAlchemy ORM
+- ✅ Complete audit trail of all device access and configuration changes
+- ✅ Input validation on all API endpoints with Pydantic schemas
+- ✅ SQL injection protection via Peewee ORM parameterized queries
+- ✅ Distributed locking via Redis prevents race conditions
+- ✅ Event queue fallback ensures no message loss during Redis outages
 
 ## Troubleshooting
 
@@ -280,14 +343,28 @@ Error: ConnectionError: Unable to connect to device at 192.168.1.100
 ### Database Migration Failures
 
 ```
-Error: alembic.util.exc.CommandError: Can't locate revision ...
+Error: peewee_migrate.MigrateException: ...
 ```
 
 **Solution**: 
 ```bash
-# Reset migrations (development only)
-rm -rf migrations/versions/*
-python -m alembic stamp head
+# Check migration status
+python -m peewee_migrate status
+
+# Rollback and re-apply migrations (development only)
+python -m peewee_migrate rollback
+python -m peewee_migrate migrate
+```
+
+### Redis/Queue Issues
+
+```
+Error: ConnectionError: Cannot connect to Redis
+```
+
+**Solution**: Queue Manager automatically falls back to SQLite queue storage. Check Redis connectivity:
+```bash
+redis-cli ping  # Should return PONG
 ```
 
 ### Vault Token Expiration
@@ -328,8 +405,11 @@ This project is licensed under the **MIT License** - see [LICENSE](LICENSE) for 
 
 Built with:
 - [FastAPI](https://fastapi.tiangolo.com/) - Web framework
-- [SQLAlchemy](https://www.sqlalchemy.org/) - ORM
+- [Peewee](http://docs.peewee-orm.com/) - ORM with multi-database support
+- [peewee-migrate](https://github.com/klen/peewee_migrate) - Database migrations
 - [Pydantic](https://docs.pydantic.dev/) - Data validation
+- [Redis](https://redis.io/) - Distributed locking and message queues
+- [HashiCorp Vault](https://www.vaultproject.io/) - Secrets management
 - [Docker](https://www.docker.com/) - Containerization
 
 ---

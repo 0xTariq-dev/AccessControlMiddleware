@@ -24,3 +24,23 @@ starlette==1.0.0
 typing-inspection==0.4.2
 typing_extensions==4.15.0
 uvicorn==0.41.0
+
+# Infrastructure & Database
+redis==4.7.0
+hvac==1.2.0
+psycopg[binary]==3.1.18
+sqlcipher3==4.5.0
+pytest-asyncio==0.23.3
+
+# Infrastructure & Services
+redis>=4.7.0
+hvac>=1.2.0
+psycopg[binary]>=3.1.0
+
+# Database & Queue Persistence
+sqlcipher3>=4.0.0
+
+# Testing & Async Support
+pytest>=7.4.0
+pytest-asyncio>=0.23.0
+
