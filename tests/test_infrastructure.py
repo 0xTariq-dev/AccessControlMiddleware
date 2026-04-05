@@ -164,7 +164,7 @@ class TestQueueManager:
     @pytest.mark.asyncio
     async def test_dequeue_timeout(self, queue_mgr: QueueManager) -> None:
         """Test dequeue with empty queue returns None after timeout."""
-        event = await queue_mgr.dequeue(timeout=0.1)
+        event = await queue_mgr.dequeue(timeout=1)
         assert event is None
 
 
@@ -178,7 +178,7 @@ class TestRedisHelper:
             redis_url="redis://localhost:6379", lock_ttl=30, max_retries=3
         )
         # Mock the redis connection
-        helper._redis = AsyncMock()
+        helper._redis = AsyncMock()  # type: ignore[assignment]
         return helper
 
     @pytest.mark.asyncio
@@ -199,51 +199,51 @@ class TestRedisHelper:
     @pytest.mark.asyncio
     async def test_push_queue(self, redis_helper: RedisHelper) -> None:
         """Test pushing data to queue."""
-        redis_helper._redis.rpush = AsyncMock(return_value=1)
+        redis_helper._redis.rpush = AsyncMock(return_value=1)  # type: ignore[attr-defined]
         length = await redis_helper.push_queue("test_queue", "data")
         assert length == 1
-        redis_helper._redis.rpush.assert_called_once()
+        redis_helper._redis.rpush.assert_called_once()  # type: ignore[attr-defined]
 
     @pytest.mark.asyncio
     async def test_pop_queue(self, redis_helper: RedisHelper) -> None:
         """Test popping data from queue."""
-        redis_helper._redis.blpop = AsyncMock(return_value=(b"queue", b"test_data"))
+        redis_helper._redis.blpop = AsyncMock(return_value=(b"queue", b"test_data"))  # type: ignore[attr-defined]
         data = await redis_helper.pop_queue("test_queue", timeout=1)
         assert data == "test_data"
 
     @pytest.mark.asyncio
     async def test_pop_queue_empty(self, redis_helper: RedisHelper) -> None:
         """Test popping from empty queue returns None."""
-        redis_helper._redis.blpop = AsyncMock(return_value=None)
-        data = await redis_helper.pop_queue("test_queue", timeout=0.1)
+        redis_helper._redis.blpop = AsyncMock(return_value=None)  # type: ignore[attr-defined]
+        data = await redis_helper.pop_queue("test_queue", timeout=1)
         assert data is None
 
     @pytest.mark.asyncio
     async def test_set_key(self, redis_helper: RedisHelper) -> None:
         """Test setting a key-value pair."""
-        redis_helper._redis.set = AsyncMock(return_value=True)
+        redis_helper._redis.set = AsyncMock(return_value=True)  # type: ignore[attr-defined]
         result = await redis_helper.set_key("test_key", "test_value", ttl=60)
         assert result is True
-        redis_helper._redis.set.assert_called_once()
+        redis_helper._redis.set.assert_called_once()  # type: ignore[attr-defined]
 
     @pytest.mark.asyncio
     async def test_get_key(self, redis_helper: RedisHelper) -> None:
         """Test getting a value from Redis."""
-        redis_helper._redis.get = AsyncMock(return_value=b"test_value")
+        redis_helper._redis.get = AsyncMock(return_value=b"test_value")  # type: ignore[attr-defined]
         value = await redis_helper.get_key("test_key")
         assert value == "test_value"
 
     @pytest.mark.asyncio
     async def test_queue_length(self, redis_helper: RedisHelper) -> None:
         """Test getting queue length."""
-        redis_helper._redis.llen = AsyncMock(return_value=5)
+        redis_helper._redis.llen = AsyncMock(return_value=5)  # type: ignore[attr-defined]
         length = await redis_helper.queue_length("test_queue")
         assert length == 5
 
     @pytest.mark.asyncio
     async def test_clear_queue(self, redis_helper: RedisHelper) -> None:
         """Test clearing a queue."""
-        redis_helper._redis.delete = AsyncMock(return_value=5)
+        redis_helper._redis.delete = AsyncMock(return_value=5)  # type: ignore[attr-defined]
         deleted = await redis_helper.clear_queue("test_queue")
         assert deleted == 5
 
@@ -258,10 +258,10 @@ class TestRedisHelper:
     @pytest.mark.asyncio
     async def test_distributed_lock_success(self, redis_helper: RedisHelper) -> None:
         """Test successful lock acquisition and release."""
-        redis_helper._redis.set = AsyncMock(return_value=True)
-        redis_helper._redis.eval = AsyncMock(return_value=1)
+        redis_helper._redis.set = AsyncMock(return_value=True)  # type: ignore[attr-defined]
+        redis_helper._redis.eval = AsyncMock(return_value=1)  # type: ignore[attr-defined]
 
         async with redis_helper.distributed_lock("device_1.2.3.4") as acquired:
             assert acquired is True
 
-        redis_helper._redis.eval.assert_called_once()
+        redis_helper._redis.eval.assert_called_once()  # type: ignore[attr-defined]

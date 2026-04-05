@@ -270,7 +270,7 @@ class DatabaseManager:
                 return f"{scheme}:{user}:***@{host}"
         return url
 
-    async def connect(self) -> None:
+    def connect(self) -> None:
         """Establish database connection.
 
         Raises:
@@ -283,7 +283,7 @@ class DatabaseManager:
             logger.error(f"Failed to connect to database: {e}")
             raise
 
-    async def disconnect(self) -> None:
+    def disconnect(self) -> None:
         """Close database connection gracefully."""
         try:
             if self.db.is_closed():
@@ -305,7 +305,7 @@ class DatabaseManager:
             Exception: If initialization fails.
         """
         try:
-            await self.connect()
+            self.connect()  # Not async - Peewee operations are synchronous
 
             if create_tables:
                 # Import models here to avoid circular imports

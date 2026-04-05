@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
 import redis.asyncio as redis
-from redis import ConnectionPool, Redis
+from redis.asyncio import ConnectionPool
 from redis.exceptions import RedisError, WatchError
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ class RedisHelper:
         """
         self._url: str = redis_url
         self._pool: ConnectionPool | None = None
-        self._redis: Redis | None = None
+        self._redis: redis.Redis | None = None
         self._lock_ttl: int = lock_ttl
         self._max_retries: int = max_retries
 
@@ -56,7 +56,7 @@ class RedisHelper:
         """
         try:
             self._pool = ConnectionPool.from_url(self._url)
-            self._redis = await redis.from_url(self._url)
+            self._redis = redis.from_url(self._url)
             await self.health_check()
             logger.info("Redis connection established")
         except RedisError as e:
@@ -71,7 +71,7 @@ class RedisHelper:
         if self._redis:
             await self._redis.close()
         if self._pool:
-            self._pool.disconnect()
+            await self._pool.disconnect()  # ConnectionPool.disconnect() is async in redis.asyncio
         logger.info("Redis connection closed")
 
     async def health_check(self) -> bool:
@@ -85,7 +85,7 @@ class RedisHelper:
             return False
 
         try:
-            result = await self._redis.ping()
+            result = await self._redis.ping()  # type: ignore[misc]
             logger.debug(f"Redis PING: {result}")
             return bool(result)
         except RedisError as e:
@@ -127,7 +127,7 @@ class RedisHelper:
             # Try to acquire lock with retries
             for attempt in range(self._max_retries):
                 try:
-                    acquired = await self._redis.set(
+                    acquired = await self._redis.set(  # type: ignore[misc]
                         lock_key,
                         lock_id,
                         ex=self._lock_ttl,
@@ -155,7 +155,7 @@ class RedisHelper:
                 try:
                     # Use Lua script for atomic lock release
                     release_script = "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end"
-                    await self._redis.eval(release_script, 1, lock_key, lock_id)
+                    await self._redis.eval(release_script, 1, lock_key, lock_id)  # type: ignore[misc]
                     logger.debug(f"Lock released: {lock_key}")
                 except RedisError as e:
                     logger.error(f"Lock release failed: {e}")
@@ -177,7 +177,7 @@ class RedisHelper:
             raise RedisError("Redis client not initialized")
 
         try:
-            length = await self._redis.rpush(queue_name, data)
+            length = await self._redis.rpush(queue_name, data)  # type: ignore[misc]
             logger.debug(f"Pushed to queue {queue_name}, length: {length}")
             return length
         except RedisError as e:
@@ -201,7 +201,7 @@ class RedisHelper:
             raise RedisError("Redis client not initialized")
 
         try:
-            result = await self._redis.blpop(queue_name, timeout=timeout)
+            result = await self._redis.blpop(queue_name, timeout=timeout)  # type: ignore[misc]
             if result:
                 _, data = result
                 logger.debug(f"Popped from queue {queue_name}")
@@ -227,7 +227,7 @@ class RedisHelper:
             raise RedisError("Redis client not initialized")
 
         try:
-            length = await self._redis.llen(queue_name)
+            length = await self._redis.llen(queue_name)  # type: ignore[misc]
             return length
         except RedisError as e:
             logger.error(f"Queue length check failed: {e}")
@@ -249,7 +249,7 @@ class RedisHelper:
             raise RedisError("Redis client not initialized")
 
         try:
-            deleted = await self._redis.delete(queue_name)
+            deleted = await self._redis.delete(queue_name)  # type: ignore[misc]
             logger.info(f"Queue cleared: {queue_name}, deleted {deleted} keys")
             return deleted
         except RedisError as e:
@@ -274,7 +274,7 @@ class RedisHelper:
             raise RedisError("Redis client not initialized")
 
         try:
-            await self._redis.set(key, value, ex=ttl)
+            await self._redis.set(key, value, ex=ttl)  # type: ignore[misc]
             logger.debug(f"Key set: {key}")
             return True
         except RedisError as e:
@@ -297,7 +297,7 @@ class RedisHelper:
             raise RedisError("Redis client not initialized")
 
         try:
-            value = await self._redis.get(key)
+            value = await self._redis.get(key)  # type: ignore[misc]
             return value.decode("utf-8") if isinstance(value, bytes) else value
         except RedisError as e:
             logger.error(f"Get key failed: {e}")
