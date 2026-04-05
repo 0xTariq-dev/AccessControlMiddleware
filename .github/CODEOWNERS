@@ -1,0 +1,53 @@
+# CODEOWNERS file for Access Control Middleware
+# This file defines code ownership and review requirements for GitHub
+# Syntax: path/to/file(s) @username @team
+
+# Global owner
+* @0xtariq-dev
+
+# Architecture and core systems
+/app/@0xtariq-dev
+/migrations/@0xtariq-dev
+/app/main.py @0xtariq-dev
+/app/database.py @0xtariq-dev
+/app/config.py @0xtariq-dev
+
+# Device integrations and drivers
+/app/devices/ @0xtariq-dev
+
+# API routers
+/app/routers/ @0xtariq-dev
+
+# Security and authentication
+/app/crypto.py @0xtariq-dev
+/app/vault_helper.py @0xtariq-dev
+
+# Database schemas
+/app/models.py @0xtariq-dev
+/app/schemas.py @0xtariq-dev
+
+# Testing infrastructure
+/tests/ @0xtariq-dev
+
+# Deployment and configuration
+/deploy/ @0xtariq-dev
+*.service @0xtariq-dev
+*.hcl @0xtariq-dev
+
+# Docker configuration
+Dockerfile @0xtariq-dev
+docker-compose.yml @0xtariq-dev
+
+# Documentation
+/docs/@0xtariq-dev
+README.md @0xtariq-dev
+CONTRIBUTING.md @0xtariq-dev
+
+# Configuration files
+.env.example @0xtariq-dev
+.gitignore @0xtariq-dev
+requirements.txt @0xtariq-dev
+pytest.ini @0xtariq-dev
+
+# GitHub workflows
+/.github/ @0xtariq-dev

@@ -1,0 +1,27 @@
+# Systemd timer for periodic tasks (e.g., log rotation, database cleanup)
+# This timer runs daily to trigger the access-control-daily.service
+#
+# Installation:
+# 1. Copy access-control.timer to /etc/systemd/system/
+# 2. Copy access-control-daily.service to /etc/systemd/system/
+# 3. sudo systemctl daemon-reload
+# 4. sudo systemctl enable access-control.timer
+# 5. sudo systemctl start access-control.timer
+#
+# Management:
+# - List timers: sudo systemctl list-timers
+# - Trigger manually: sudo systemctl start access-control-daily
+# - View timer status: sudo systemctl status access-control.timer
+
+[Unit]
+Description=Daily maintenance for Access Control Middleware
+Requires=access-control.service
+After=access-control.service
+
+[Timer]
+# Run daily at 2 AM
+OnCalendar=*-*-* 02:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

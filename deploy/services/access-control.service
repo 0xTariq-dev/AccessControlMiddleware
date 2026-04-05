@@ -1,0 +1,60 @@
+# Systemd service unit for Access Control Middleware
+# This allows Docker Compose to start on boot and restart on failure
+#
+# Installation:
+# 1. Copy this file to: /etc/systemd/system/access-control.service
+# 2. Update WorkingDirectory path to your project location (where docker-compose.yml is)
+# 3. sudo systemctl daemon-reload
+# 4. sudo systemctl enable access-control.service
+# 5. sudo systemctl start access-control.service
+#
+# Management:
+# - Start:   sudo systemctl start access-control
+# - Stop:    sudo systemctl stop access-control
+# - Restart: sudo systemctl restart access-control
+# - Status:  sudo systemctl status access-control
+# - Logs:    sudo journalctl -u access-control -f
+#
+# Note: WorkingDirectory is the HOST path where docker-compose.yml is located,
+#       NOT a Docker mount path. Example: /opt/access-control or /srv/access-control
+
+[Unit]
+Description=Access Control Middleware (Docker Compose)
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+
+# Update this path to your project directory on the HOST machine
+# This is where docker-compose.yml is located (NOT a Docker mount path)
+WorkingDirectory=/srv/access-control
+
+# Start command - bring up all containers
+ExecStart=/usr/bin/docker-compose up -d
+
+# Stop command - gracefully stop containers
+ExecStop=/usr/bin/docker-compose down
+
+# Reload command - restart containers with new config
+ExecReload=/usr/bin/docker-compose restart
+
+# Restart policy
+Restart=on-failure
+RestartSec=10s
+
+# Security hardening
+User=root  # Required for Docker access
+NoNewPrivileges=true
+
+# Resource limits (optional - adjust based on your needs)
+# MemoryLimit=2G
+# CPUQuota=200%
+
+# Environment (if needed)
+# Environment="COMPOSE_PROJECT_NAME=access_control"
+
+[Install]
+WantedBy=multi-user.target

@@ -210,3 +210,35 @@ __marimo__/
 docs/
 *.db
 logs/
+
+# Vault and Secrets Management
+.vault-token
+.vault-unseal-keys
+vault-init.json
+
+# Environment and Credentials (NEVER commit these)
+.env
+.env.local
+.env.*.local
+
+# IDE and Editor Settings
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Build and Distribution
+build/
+dist/
+*.egg-info/
+
+# Application-Specific
+volumes/
+.dockerignore
+*.pyc
+__pycache__/
+.pytest_cache/
+coverage.xml
+
